@@ -31,6 +31,9 @@ fun LightScreen() {
     val client = remember { LightClient(context.applicationContext) }
     val executor = remember { Executors.newSingleThreadExecutor() }
     DisposableEffect(Unit) { onDispose { executor.shutdown() } }
+    var localMode by remember { mutableStateOf(true) }
+    var lanIp by remember { mutableStateOf(client.lanIp()) }
+    var lanToken by remember { mutableStateOf("") }
     var url by remember { mutableStateOf(client.savedUrl()) }
     var entity by remember { mutableStateOf(client.savedEntity()) }
     var token by remember { mutableStateOf("") }
@@ -60,6 +63,17 @@ fun LightScreen() {
     fun send(power: Boolean, powerOnly: Boolean = false) {
         if (!connected) return
         if (!hex.matches(Regex("#[0-9a-fA-F]{6}"))) { status = "Ingresa un HEX válido"; return }
+        if (localMode) {
+            runTask({
+                val selected = lanToken.ifBlank { require(lanIp == client.lanIp()) { "Ingresa el token para esta IP" }; client.lanToken() }
+                val direct = MiioClient(lanIp, selected)
+                direct.set(power, if (power && !powerOnly) brightness.toInt() else null,
+                    if (power && !powerOnly && mode == "color") hex.substring(1).toInt(16) else null,
+                    if (power && !powerOnly && mode == "temperature") temperature.toInt() else null)
+                JSONObject()
+            }) { on = power; status = "La luz aceptó el comando" }
+            return
+        }
         val body = JSONObject().put("entity_id", entity)
         if (power && !powerOnly) {
             body.put("brightness_pct", brightness.toInt())
@@ -73,6 +87,25 @@ fun LightScreen() {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 36.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Luz", style = MaterialTheme.typography.headlineLarge)
         Text(status, style = MaterialTheme.typography.bodyMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = { localMode = true; connected = false; status = "Conecta una luz ya vinculada a Xiaomi Home" }) { Text("Xiaomi local") }
+            TextButton(onClick = { localMode = false; connected = false; status = "Conecta mediante Home Assistant" }) { Text("Home Assistant") }
+        }
+        if (localMode) {
+            Text("La luz debe estar en línea y conectada a la misma red Wi-Fi. Necesitas su IP y token local de Xiaomi.")
+            OutlinedTextField(lanIp, { lanIp = it.trim(); connected = false }, label = { Text("IP local de la luz") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(lanToken, { lanToken = it.trim(); connected = false }, label = { Text("Token local (32 caracteres)") }, visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(enabled = !busy, onClick = {
+                    runTask({
+                        val selected = lanToken.ifBlank { require(lanIp == client.lanIp()) { "Ingresa el token para esta IP" }; client.lanToken() }
+                        val state = MiioClient(lanIp, selected).verify()
+                        client.saveLan(lanIp, selected); state
+                    }) { state -> connected = true; on = state.optBoolean("on"); lanToken = ""; status = "Luz Xiaomi conectada" }
+                }) { Text("Conectar") }
+                OutlinedButton(onClick = { client.forgetLan(); lanIp = ""; lanToken = ""; connected = false; status = "Conexión eliminada" }) { Text("Olvidar") }
+            }
+        } else {
         OutlinedTextField(url, { url = it; connected = false }, label = { Text("Dirección HTTPS de Home Assistant") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(token, { token = it; connected = false }, label = { Text("Token (vacío para usar el guardado)") }, visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(entity, { entity = it; connected = false }, label = { Text("Entidad, por ejemplo light.salon") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -86,6 +119,7 @@ fun LightScreen() {
                 }) { state -> connected = true; on = state.optString("state") == "on"; token = ""; status = "Conectada" }
             }) { Text("Conectar") }
             OutlinedButton(onClick = { client.forget(); token = ""; url = ""; entity = ""; connected = false; status = "Conexión eliminada" }) { Text("Olvidar") }
+        }
         }
         val preview = runCatching { Color(android.graphics.Color.parseColor(hex)) }.getOrDefault(Color.Gray)
         Spacer(Modifier.fillMaxWidth().height(72.dp).background(preview))
@@ -118,6 +152,6 @@ fun LightScreen() {
                 TextButton(onClick = { scenes = scenes.lines().filter { it != row && it.isNotBlank() }.joinToString("\n", postfix = "\n"); prefs.edit().putString("values", scenes).apply() }) { Text("Eliminar") }
             }
         }
-        Text("Requiere una luz compatible configurada en Home Assistant.", style = MaterialTheme.typography.bodySmall)
+        Text("El estado y los comandos requieren una conexión activa.", style = MaterialTheme.typography.bodySmall)
     }
 }

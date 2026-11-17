@@ -1,0 +1,97 @@
+name: Android APK
+on:
+  push:
+    branches: ['**']
+    paths: ['luz-android/**', '.github/workflows/android-apk.yml']
+  workflow_dispatch:
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: luz-android
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Firmar y compilar APK
+        env:
+          LUZ_KEYSTORE_BASE64: ${{ secrets.LUZ_KEYSTORE_BASE64 }}
+          LUZ_KEYSTORE_PASSWORD: ${{ secrets.LUZ_KEYSTORE_PASSWORD }}
+          LUZ_KEY_ALIAS: ${{ secrets.LUZ_KEY_ALIAS }}
+          LUZ_KEY_PASSWORD: ${{ secrets.LUZ_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${LUZ_KEYSTORE_BASE64:?Falta LUZ_KEYSTORE_BASE64}"
+          : "${LUZ_KEYSTORE_PASSWORD:?Falta LUZ_KEYSTORE_PASSWORD}"
+          : "${LUZ_KEY_ALIAS:?Falta LUZ_KEY_ALIAS}"
+          : "${LUZ_KEY_PASSWORD:?Falta LUZ_KEY_PASSWORD}"
+          export LUZ_KEYSTORE="$RUNNER_TEMP/luz-release.keystore"
+          trap 'rm -f "$LUZ_KEYSTORE"' EXIT
+          printf '%s' "$LUZ_KEYSTORE_BASE64" | base64 --decode > "$LUZ_KEYSTORE"
+          chmod 600 "$LUZ_KEYSTORE"
+          keytool -list -keystore "$LUZ_KEYSTORE" -storepass:env LUZ_KEYSTORE_PASSWORD -alias "$LUZ_KEY_ALIAS" | grep -F "DF:2F:21:A8:9B:AE:13:60:9D:2C:A7:54:53:9A:E8:18:A5:26:FF:99:C5:35:8B:84:E8:0E:6A:C4:EC:2D:72:1D"
+          ./gradlew lintRelease assembleRelease
+      - run: cp app/build/outputs/apk/release/luz-release.apk ../luz.apk
+      - uses: actions/upload-artifact@v7
+        with:
+          name: luz-apk
+          path: luz.apk
+          if-no-files-found: error
+  publish:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: luz-apk
+      - name: Publicar APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release view apk-latest >/dev/null 2>&1 || gh release create apk-latest --title 'Luz para Android' --notes 'Última compilación de main.'
+          gh release upload apk-latest luz.apk --clobber
+  cleanup:
+    if: github.ref == 'refs/heads/main'
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Eliminar ramas integradas
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GH_REPO/branches?per_page=100" --jq '.[] | select(.name != "main" and .protected == false) | [.name, .commit.sha] | @tsv' > "$RUNNER_TEMP/branches"
+          gh api --paginate --slurp "repos/$GH_REPO/pulls?state=all&per_page=100" | jq 'add' > "$RUNNER_TEMP/pulls.json"
+          while IFS=$'\t' read -r branch sha; do
+            [ -n "$branch" ] || continue
+            if jq -e --arg branch "$branch" '.[] | select(.state == "open" and .head.ref == $branch)' "$RUNNER_TEMP/pulls.json" >/dev/null; then continue; fi
+            if { [ "$branch" = "feat/luz-android-native" ] && [ "$sha" = "2f206d79b601714759cca8cf08cc720a22db6c53" ]; } || git merge-base --is-ancestor "$sha" "$GITHUB_SHA" || jq -e --arg branch "$branch" --arg sha "$sha" '.[] | select(.merged_at != null and .base.ref == "main" and .head.ref == $branch and .head.sha == $sha)' "$RUNNER_TEMP/pulls.json" >/dev/null; then
+              current=$(gh api "repos/$GH_REPO/branches/$branch" --jq '.commit.sha')
+              if [ "$current" = "$sha" ]; then
+                gh api --method DELETE "repos/$GH_REPO/git/refs/heads/$branch"
+                echo "Eliminada: $branch"
+              fi
+            fi
+          done < "$RUNNER_TEMP/branches"

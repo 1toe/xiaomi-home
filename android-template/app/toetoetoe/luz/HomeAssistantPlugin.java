@@ -94,10 +94,15 @@ public class HomeAssistantPlugin extends Plugin {
   @PluginMethod public void command(PluginCall call) {
     String entity = call.getString("entity", ""), color = call.getString("color", "");
     Boolean on = call.getBoolean("on"); Integer brightness = call.getInt("brightness");
+    String mode = call.getString("mode", "color"); Integer temperature = call.getInt("temperature");
     async(call, () -> {
-      if (!entityValid(entity) || on == null || brightness == null || brightness < 1 || brightness > 100 || !color.matches("#[0-9a-fA-F]{6}")) throw new Exception();
+      if (!entityValid(entity) || on == null || brightness == null || brightness < 1 || brightness > 100 || !color.matches("#[0-9a-fA-F]{6}") || !(mode.equals("color") || mode.equals("temperature") || mode.equals("power")) || (mode.equals("temperature") && (temperature == null || temperature < 1000 || temperature > 40000))) throw new Exception();
       JSONObject data = new JSONObject().put("entity_id", entity);
-      if (on) data.put("brightness_pct", brightness).put("rgb_color", new JSONArray().put(Integer.parseInt(color.substring(1,3),16)).put(Integer.parseInt(color.substring(3,5),16)).put(Integer.parseInt(color.substring(5,7),16)));
+      if (on && !mode.equals("power")) {
+        data.put("brightness_pct", brightness);
+        if (mode.equals("temperature")) data.put("color_temp_kelvin", temperature);
+        else data.put("rgb_color", new JSONArray().put(Integer.parseInt(color.substring(1,3),16)).put(Integer.parseInt(color.substring(3,5),16)).put(Integer.parseInt(color.substring(5,7),16)));
+      }
       request(validateBase(prefs().getString("url", "")), token(), "/api/services/light/" + (on ? "turn_on" : "turn_off"), data);
       JSObject result = new JSObject(); result.put("ok", true); return result;
     });

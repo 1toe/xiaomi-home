@@ -23,12 +23,12 @@ http.createServer(async (req,res) => {
     try {
       if (req.method === 'GET' && url.pathname === '/api/state') {
         const entity=url.searchParams.get('entity'); if(!validEntity(entity)) return json(res,400,{error:'Ingresa una entidad light válida.'});
-        const state=await requestHA('/api/states/'+entity); return json(res,200,{state:state.state,attributes:{friendly_name:state.attributes?.friendly_name}});
+        const state=await requestHA('/api/states/'+entity); return json(res,200,{state:state.state,attributes:state.attributes});
       }
       if (req.method === 'POST' && url.pathname === '/api/light' && req.headers['content-type'] === 'application/json') {
         let raw=''; for await (const chunk of req) {raw+=chunk;if(raw.length>2048)return json(res,413,{error:'Solicitud demasiado grande.'})}
-        const {entity,on,color,brightness}=JSON.parse(raw); if(!validEntity(entity)||typeof on!=='boolean'||!/^#[0-9a-f]{6}$/i.test(color)||!Number.isInteger(brightness)||brightness<1||brightness>100)return json(res,400,{error:'Datos inválidos.'});
-        const data={entity_id:entity}; if(on){data.rgb_color=[1,3,5].map(i=>parseInt(color.slice(i,i+2),16));data.brightness_pct=brightness}
+        const {entity,on,color,brightness,temperature,mode='color'}=JSON.parse(raw); if(!validEntity(entity)||typeof on!=='boolean'||!/^#[0-9a-f]{6}$/i.test(color)||!Number.isInteger(brightness)||brightness<1||brightness>100||!['color','temperature','power'].includes(mode)||(mode==='temperature'&&(!Number.isInteger(temperature)||temperature<1000||temperature>40000)))return json(res,400,{error:'Datos inválidos.'});
+        const data={entity_id:entity}; if(on&&mode!=='power'){data.brightness_pct=brightness;if(mode==='temperature')data.color_temp_kelvin=temperature;else data.rgb_color=[1,3,5].map(i=>parseInt(color.slice(i,i+2),16))}
         await requestHA('/api/services/light/'+(on?'turn_on':'turn_off'),{method:'POST',body:JSON.stringify(data)});return json(res,200,{ok:true});
       }
       return json(res,404,{error:'Ruta no encontrada.'});

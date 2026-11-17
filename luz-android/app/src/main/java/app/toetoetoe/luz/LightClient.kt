@@ -33,7 +33,24 @@ class LightClient(context: Context) {
             .putString("token", Base64.encodeToString(encrypted, Base64.NO_WRAP))
             .putString("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP)).commit())
     }
-    fun forget() { prefs.edit().clear().apply() }
+    fun saveLan(ip: String, token: String) {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key) }
+        val encrypted = cipher.doFinal(token.toByteArray(Charsets.UTF_8))
+        check(prefs.edit().putString("lan_ip", ip)
+            .putString("lan_token", Base64.encodeToString(encrypted, Base64.NO_WRAP))
+            .putString("lan_iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP)).commit())
+    }
+    fun lanIp(): String = prefs.getString("lan_ip", "") ?: ""
+    fun lanToken(): String {
+        val encrypted = prefs.getString("lan_token", null) ?: return ""
+        val iv = prefs.getString("lan_iv", null) ?: return ""
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
+            init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP)))
+        }
+        return String(cipher.doFinal(Base64.decode(encrypted, Base64.NO_WRAP)), Charsets.UTF_8)
+    }
+    fun forgetLan() { prefs.edit().remove("lan_ip").remove("lan_token").remove("lan_iv").apply() }
+    fun forget() { prefs.edit().remove("url").remove("entity").remove("token").remove("iv").apply() }
     fun savedUrl(): String = prefs.getString("url", "") ?: ""
     fun savedEntity(): String = prefs.getString("entity", "") ?: ""
     fun savedToken(): String {

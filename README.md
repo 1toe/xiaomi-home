@@ -24,3 +24,8 @@ El repositorio fija `rea-agents` en 6.9.0. Ejecuta `npm install` y después `npm
 ## Android
 
 GitHub Actions compila un APK de depuración para Android y lo adjunta a cada ejecución junto al SHA. En el teléfono, configura la URL HTTPS válida de Home Assistant, un token de acceso y la entidad de luz. El token se cifra con Android Keystore; se puede borrar desde la aplicación. El APK no contiene credenciales. La conexión y las funciones dependen del dispositivo y de la integración de Xiaomi en Home Assistant. No se ha comprobado con un dispositivo físico.
+
+
+## Xiaomi local (experimental)
+
+La aplicación Android permite conectar por IP local una `yeelink.light.color5` ya configurada y en línea, usando su token local de 32 caracteres hexadecimales. El teléfono y la ampolleta deben estar en la misma red; no ingreses contraseñas de Xiaomi ni compartas el token. La aplicación comprueba el modelo y cifra el token con Android Keystore. Permite encendido, brillo, color y temperatura mediante MIoT local. Esta conexión no configura el Wi-Fi ni registra la luz en la cuenta Xiaomi; tampoco obtiene el token automáticamente. La compatibilidad necesita validación con el dispositivo físico. Home Assistant sigue disponible como alternativa.

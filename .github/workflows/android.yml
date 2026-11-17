@@ -9,6 +9,8 @@ permissions:
   contents: read
 jobs:
   android:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -35,13 +37,27 @@ jobs:
         run: ./gradlew --no-daemon assembleDebug
       - name: Collect build
         run: |
-          mkdir -p releases/android
-          cp android/app/build/outputs/apk/debug/app-debug.apk releases/android/luz-debug.apk
-          printf '%s\n' "$GITHUB_SHA" > releases/android/SHA.txt
-          cd releases/android && sha256sum luz-debug.apk > SHA256SUMS.txt
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="$GITHUB_REF_NAME"
+          else
+            version="commit-${GITHUB_SHA:0:12}"
+          fi
+          mkdir -p "releases/$version"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "releases/$version/luz-$version-debug.apk"
+          printf '%s\n' "$GITHUB_SHA" > "releases/$version/SHA.txt"
+          (cd "releases/$version" && sha256sum "luz-$version-debug.apk" > SHA256SUMS.txt)
+          echo "VERSION=$version" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: luz-android-${{ github.sha }}
-          path: releases/android/
+          name: luz-android-${{ env.VERSION }}
+          path: releases/
           if-no-files-found: error
           retention-days: 90
+      - name: Publish Android release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          (cd releases && zip -qr "luz-${VERSION}-android.zip" "$VERSION")
+          zip -qr "releases/xiaomi-home-${VERSION}-web.zip" dist server.mjs package.json
+          gh release create "$GITHUB_REF_NAME" "releases/$VERSION/luz-$VERSION-debug.apk" "releases/luz-$VERSION-android.zip" "releases/$VERSION/SHA256SUMS.txt" "releases/xiaomi-home-${VERSION}-web.zip" --title "$GITHUB_REF_NAME" --notes "APK de depuración. Commit: $GITHUB_SHA. La compatibilidad con la ampolleta requiere validación física."

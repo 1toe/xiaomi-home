@@ -20,3 +20,7 @@ Abrir http://localhost:4173 y escribir la entidad, por ejemplo `light.salon`. El
 ## REA
 
 El repositorio fija `rea-agents` en 6.9.0. Ejecuta `npm install` y después `npm run rea:setup:codex` o `npm run rea:setup:claude`; verifica con `npm run rea:doctor:codex` o `npm run rea:doctor:claude`.
+
+## Android
+
+GitHub Actions compila un APK de depuración para Android y lo adjunta a cada ejecución junto al SHA. En el teléfono, configura la URL HTTPS válida de Home Assistant, un token de acceso y la entidad de luz. El token se cifra con Android Keystore; se puede borrar desde la aplicación. El APK no contiene credenciales. La conexión y las funciones dependen del dispositivo y de la integración de Xiaomi en Home Assistant. No se ha comprobado con un dispositivo físico.

@@ -1,0 +1,19 @@
+{
+  "name": "xiaomi-home",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Xiaomi Home project with reproducible REA tooling.",
+  "scripts": {
+    "rea:setup:codex": "rea setup --client codex",
+    "rea:setup:claude": "rea setup --client claude_code",
+    "rea:doctor:codex": "rea doctor --client codex --skill --json",
+    "rea:doctor:claude": "rea doctor --client claude_code --skill --json",
+    "rea:doctor": "rea doctor --skill --json"
+  },
+  "devDependencies": {
+    "rea-agents": "6.9.0"
+  },
+  "engines": {
+    "node": ">=22.23.4 <23 || >=24.22.1 <25 || >=26.12.1"
+  }
+}

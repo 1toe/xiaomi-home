@@ -59,4 +59,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           (cd releases && zip -qr "luz-${VERSION}-android.zip" "$VERSION")
-          gh release create "$GITHUB_REF_NAME" "releases/$VERSION/luz-$VERSION-debug.apk" "releases/luz-$VERSION-android.zip" "releases/$VERSION/SHA256SUMS.txt" --title "$GITHUB_REF_NAME" --notes "APK de depuración. Commit: $GITHUB_SHA. La compatibilidad con la ampolleta requiere validación física."
+          zip -qr "releases/xiaomi-home-${VERSION}-web.zip" dist server.mjs package.json
+          gh release create "$GITHUB_REF_NAME" "releases/$VERSION/luz-$VERSION-debug.apk" "releases/luz-$VERSION-android.zip" "releases/$VERSION/SHA256SUMS.txt" "releases/xiaomi-home-${VERSION}-web.zip" --title "$GITHUB_REF_NAME" --notes "APK de depuración. Commit: $GITHUB_SHA. La compatibilidad con la ampolleta requiere validación física."
